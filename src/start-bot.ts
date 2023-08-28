@@ -1,6 +1,7 @@
 import { REST } from '@discordjs/rest';
 import { Options, Partials } from 'discord.js';
 import { createRequire } from 'node:module';
+import { discordBot } from './services/goals/index.js';
 
 import { Button } from './buttons/index.js';
 import { DevCommand, HelpCommand, InfoCommand, TestCommand } from './commands/chat/index.js';
@@ -66,8 +67,8 @@ async function start(): Promise<void> {
 
         // User Context Commands
         new ViewDateJoined(),
-
         // TODO: Add new commands here
+        ...discordBot.commands()
     ];
 
     // Buttons

@@ -1,4 +1,5 @@
 import { Locale } from 'discord.js';
+import { CommandInteractionOptionResolver } from 'discord.js';
 
 // This class is used to store and pass data along in events
 export class EventData {
@@ -7,6 +8,8 @@ export class EventData {
         // Event language
         public lang: Locale,
         // Guild language
-        public langGuild: Locale
+        public langGuild: Locale,
+        // Interaction arguments
+        public args?: Omit<CommandInteractionOptionResolver, 'getMessage' | 'getFocused'>
     ) {}
 }

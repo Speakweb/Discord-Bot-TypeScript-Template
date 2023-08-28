@@ -34,6 +34,6 @@ export class EventDataService {
                 ? options.guild.preferredLocale
                 : Language.Default;
 
-        return new EventData(lang, langGuild);
+        return new EventData(lang, langGuild, options.args);
     }
 }
