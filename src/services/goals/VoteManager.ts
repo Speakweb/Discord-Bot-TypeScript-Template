@@ -1,3 +1,4 @@
+import fs from 'fs';
 // The VoteStore interface defines the methods for storing and retrieving votes.
 // Each vote is associated with a goal by its unique ID.
 export interface VoteStore {
@@ -25,20 +26,19 @@ export class InMemoryVoteStore implements VoteStore {
 // This is a more persistent storage solution suitable for larger-scale applications.
 export class JSONVoteStore implements VoteStore {
   private votes: Vote[] = [];
-  private fs = require('fs');
   private jsonFile = 'votes.json';
 
   // The constructor checks if the JSON file exists and loads the votes from it if it does.
   constructor() {
-    if (this.fs.existsSync(this.jsonFile)) {
-      this.votes = JSON.parse(this.fs.readFileSync(this.jsonFile));
+    if (fs.existsSync(this.jsonFile)) {
+      this.votes = JSON.parse(fs.readFileSync(this.jsonFile).toString('utf-8'));
     }
   }
 
   // The save method stores a vote in the JSON file.
   async save(vote: Vote): Promise<void> {
     this.votes.push(vote);
-    this.fs.writeFileSync(this.jsonFile, JSON.stringify(this.votes));
+    fs.writeFileSync(this.jsonFile, JSON.stringify(this.votes));
   }
 
   // The getVotes method retrieves all votes associated with a specific goal from the JSON file.

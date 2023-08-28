@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 // The Goal interface represents a user's goal in the application.
 // It includes the user's ID, a description of the goal, the due date for the goal, and a unique ID for the goal.
 export interface Goal {
@@ -43,27 +45,26 @@ export class InMemoryGoalStore implements GoalStore {
 // This provides a simple way to persist goals between application runs.
 export class JSONGoalStore implements GoalStore {
   private store: Goal[] = [];
-  private fs = require('fs');
   private jsonFile = 'goals.json';
 
   constructor() {
     // If the JSON file exists when the store is created, load the goals from the file.
-    if (this.fs.existsSync(this.jsonFile)) {
-      this.store = JSON.parse(this.fs.readFileSync(this.jsonFile));
+    if (fs.existsSync(this.jsonFile)) {
+      this.store = JSON.parse(fs.readFileSync(this.jsonFile).toString('utf-8'));
     }
   }
 
   async save(goal: Goal): Promise<number> {
     this.store.push(goal);
     // After a goal is saved, write the entire store to the JSON file.
-    this.fs.writeFileSync(this.jsonFile, JSON.stringify(this.store));
+    fs.writeFileSync(this.jsonFile, JSON.stringify(this.store));
     return goal.id;
   }
 
   async delete(id: number): Promise<void> {
     this.store = this.store.filter(goal => goal.id !== id);
     // After a goal is deleted, write the entire store to the JSON file.
-    this.fs.writeFileSync(this.jsonFile, JSON.stringify(this.store));
+    fs.writeFileSync(this.jsonFile, JSON.stringify(this.store));
   }
 
   async get(id: number): Promise<Goal | null> {
