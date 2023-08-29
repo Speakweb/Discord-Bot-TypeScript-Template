@@ -70,6 +70,7 @@ async function start(): Promise<void> {
         // TODO: Add new commands here
         ...discordBot.commands()
     ];
+    console.log(commands)
 
     // Buttons
     let buttons: Button[] = [
@@ -122,6 +123,7 @@ async function start(): Promise<void> {
                 ...Object.values(ChatCommandMetadata).sort((a, b) => (a.name > b.name ? 1 : -1)),
                 ...Object.values(MessageCommandMetadata).sort((a, b) => (a.name > b.name ? 1 : -1)),
                 ...Object.values(UserCommandMetadata).sort((a, b) => (a.name > b.name ? 1 : -1)),
+                ...discordBot.commandMetadata()
             ];
             await commandRegistrationService.process(localCmds, process.argv);
         } catch (error) {
