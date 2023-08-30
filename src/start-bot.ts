@@ -70,7 +70,6 @@ async function start(): Promise<void> {
         // TODO: Add new commands here
         ...discordBot.commands()
     ];
-    console.log(commands)
 
     // Buttons
     let buttons: Button[] = [

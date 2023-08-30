@@ -68,8 +68,13 @@ export class DiscordBotImpl {
           const userId = intr.user.id;
           const goal = data.args.getString("goal");
           const dueDate = new Date(data.args.getString("duedate"));
-          InteractionUtils.send(intr, JSON.stringify(await discordBotImpl.handleGoalCommand(userId, goal, dueDate)));
+          const goalId = await discordBotImpl.handleGoalCommand(userId, goal, dueDate);
+          InteractionUtils.send(intr, `Goal with ID: ${goalId} was created.`);
+          if (data.channel instanceof TextChannel || data.channel instanceof DMChannel) {
+            data.channel.send(`Goal with ID: ${goalId} was created.`);
+          }
         }
+
       },
       {
         names: ['vote'],
@@ -164,4 +169,5 @@ export class DiscordBotImpl {
     ];
   }
 }
+
 
