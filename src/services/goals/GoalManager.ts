@@ -1,12 +1,13 @@
 import fs from 'fs';
 
 // The Goal interface represents a user's goal in the application.
-// It includes the user's ID, a description of the goal, the due date for the goal, and a unique ID for the goal.
+// It includes the user's ID, a description of the goal, the due date for the goal, a unique ID for the goal, and the channelId where the goal was created.
 export interface Goal {
   userId: string;
   description: string;
   dueDate: Date;
   id: number;
+  channelId: string; // Added channelId to store the channel where the goal was created
 }
 
 // The GoalStore interface defines the methods that any goal storage implementation must provide.
@@ -79,7 +80,7 @@ export class JSONGoalStore implements GoalStore {
 // The GoalManager interface defines the methods that the application uses to interact with goals.
 // This allows the application to create, delete, and retrieve goals without knowing how they are stored.
 export interface GoalManager {
-  createGoal(userId: string, goal: string, dueDate: Date): Promise<number>;
+  createGoal(userId: string, goal: string, dueDate: Date, channelId: string): Promise<number>; // Added channelId parameter to createGoal method
   deleteGoal(goalId: number): Promise<void>;
   getGoal(goalId: number): Promise<Goal | null>;
   listGoals(): Promise<Goal[]>; // Added method to get all goals
@@ -90,11 +91,11 @@ export interface GoalManager {
 export class GoalManagerImpl implements GoalManager {
   constructor(private goalStore: GoalStore) {}
 
-  async createGoal(userId: string, goal: string, dueDate: Date): Promise<number> {
+  async createGoal(userId: string, goal: string, dueDate: Date, channelId: string): Promise<number> { // Added channelId parameter to createGoal method
     // When a goal is created, it is given a random ID.
     // This is a simple way to generate unique IDs, but in a real application a more robust method would be used.
     const id = Math.floor(Math.random() * 10000);
-    const newGoal = {userId, dueDate, id, description: goal};
+    const newGoal = {userId, dueDate, id, description: goal, channelId}; // Added channelId to the newGoal object
     return this.goalStore.save(newGoal);
   }
 
@@ -110,5 +111,6 @@ export class GoalManagerImpl implements GoalManager {
     return this.goalStore.getAll();
   }
 }
+
 
 

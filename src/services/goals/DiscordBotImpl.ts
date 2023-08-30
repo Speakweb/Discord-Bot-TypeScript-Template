@@ -1,7 +1,9 @@
 import { Client, Partials, GatewayIntentBits, SlashCommandBuilder, REST, Routes, TextChannel, DMChannel, RESTPostAPIChatInputApplicationCommandsJSONBody, ApplicationCommandType, ApplicationCommandOptionType } from 'discord.js';
-import { GoalManager, GoalManagerImpl } from './GoalManager.js';
+import { Goal, GoalManager, GoalManagerImpl } from './GoalManager.js';
 import { VoteManager, VoteManagerImpl } from './VoteManager';
 import { InsultGenerator } from './InsultGenerator';
+import { GoalScanner } from './GoalScanner.js'; // Import GoalScanner
+import { EvidenceManager, EvidenceManagerImpl, JSONEvidenceStore } from './GoalEvidenceManager.js'; // Import EvidenceManager
 import { ChatInputCommandInteraction } from 'discord.js'; // Import Command related classes
 import { Command, CommandDeferType } from '../../commands/index.js';
 import { EventData } from '../../models/internal-models.js';
@@ -13,6 +15,8 @@ export class DiscordBotImpl {
   private goalManager: GoalManager;
   private voteManager: VoteManager;
   private insultGenerator: InsultGenerator;
+  private goalScanner: GoalScanner; // Declare GoalScanner
+  private evidenceManager: EvidenceManager; // Declare EvidenceManager
 
   constructor(
     goalManager: GoalManager,
@@ -22,10 +26,12 @@ export class DiscordBotImpl {
     this.goalManager = goalManager;
     this.voteManager = voteManager;
     this.insultGenerator = insultGenerator;
+    this.goalScanner = new GoalScanner(goalManager, this.client); // Initialize GoalScanner
+    this.evidenceManager = new EvidenceManagerImpl(new JSONEvidenceStore()); // Initialize EvidenceManager
   }
 
-  async handleGoalCommand(userId: string, goal: string, dueDate: Date): Promise<number> {
-    return this.goalManager.createGoal(userId, goal, dueDate);
+  async handleGoalCommand(userId: string, goal: string, dueDate: Date, channelId: string): Promise<number> {
+    return this.goalManager.createGoal(userId, goal, dueDate, channelId);
   }
 
   async handleVoteCommand(userId: string, goalId: number, vote: boolean): Promise<void> {
@@ -41,7 +47,11 @@ export class DiscordBotImpl {
     return result ? message : `Vote is not completed. ${message}`;
   }
 
-  async listGoals(): Promise<any> {
+  async handleEvidenceCommand(userId: string, goalId: number, evidence: string): Promise<void> {
+    await this.evidenceManager.addEvidence({userId, goalId, evidence});
+  }
+
+  async listGoals(): Promise<{ goal: Goal; votes: { for: number; against: number } }[]> {
     const goals = await this.goalManager.listGoals();
     const goalVotes = await Promise.all(goals.map(async (goal) => {
       const [forCount, againstCount] = await this.voteManager.tallyVotes(goal.id);
@@ -68,41 +78,68 @@ export class DiscordBotImpl {
           const userId = intr.user.id;
           const goal = data.args.getString("goal");
           const dueDate = new Date(data.args.getString("duedate"));
-          const goalId = await discordBotImpl.handleGoalCommand(userId, goal, dueDate);
-          InteractionUtils.send(intr, `Goal with ID: ${goalId} was created.`);
+          const channelId = intr.channelId;
+          const goalId = await discordBotImpl.handleGoalCommand(userId, goal, dueDate, channelId);
+          const formattedDueDate = dueDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          InteractionUtils.send(intr, `Goal with ID: ${goalId}, Description: ${goal}, Due Date: ${formattedDueDate} was created.`);
           if (data.channel instanceof TextChannel || data.channel instanceof DMChannel) {
-            data.channel.send(`Goal with ID: ${goalId} was created.`);
+            // data.channel.send(`Goal with ID: ${goalId}, Description: ${goal}, Due Date: ${formattedDueDate} was created.`);
           }
         }
-
       },
       {
         names: ['vote'],
         requireClientPerms: [],
-        deferType: CommandDeferType.HIDDEN,
+        deferType: CommandDeferType.PUBLIC,
         async execute(intr: ChatInputCommandInteraction, data: EventData): Promise<void> {
           const userId = intr.user.id;
           const goalId = data.args.getNumber("goalid");
           const vote = data.args.getBoolean("vote");
-          InteractionUtils.send(intr, JSON.stringify(await discordBotImpl.handleVoteCommand(userId, goalId, vote)));
+          await discordBotImpl.handleVoteCommand(userId, goalId, vote);
+          InteractionUtils.send(intr, `Vote for goal ID: ${goalId} was cast.`);
         }
       },
       {
         names: ['checkgoal'],
         requireClientPerms: [],
-        deferType: CommandDeferType.HIDDEN,
+        deferType: CommandDeferType.PUBLIC,
         async execute(intr: ChatInputCommandInteraction, data: EventData): Promise<void> {
           const userId = intr.user.id;
           const goalId = data.args.getNumber("goalid");
-          InteractionUtils.send(intr, JSON.stringify(await discordBotImpl.handleCheckCommand(userId, goalId)));
+          const goalCheckMessage = await discordBotImpl.handleCheckCommand(userId, goalId);
+          const evidences = await discordBotImpl.evidenceManager.getEvidences(goalId);
+          InteractionUtils.send(intr, `Goal Check Message: ${goalCheckMessage}, Evidences: ${evidences.map(evidence => evidence.evidence).join(', ')}`);
+        }
+      },
+      {
+        names: ['addevidence'],
+        requireClientPerms: [],
+        deferType: CommandDeferType.PUBLIC,
+        async execute(intr: ChatInputCommandInteraction, data: EventData): Promise<void> {
+          const goalId = data.args.getNumber("goalid");
+          const evidence = data.args.getString("evidence");
+          await discordBotImpl.handleEvidenceCommand(intr.user.id, goalId, evidence);
+          InteractionUtils.send(intr, `Evidence for goal ID: ${goalId} was added.`);
         }
       },
       {
         names: ['listgoals'],
         requireClientPerms: [],
-        deferType: CommandDeferType.HIDDEN,
+        deferType: CommandDeferType.PUBLIC,
         async execute(intr: ChatInputCommandInteraction, data: EventData): Promise<void> {
-          await InteractionUtils.send(intr, JSON.stringify(await discordBotImpl.listGoals()));
+          const goals = await discordBotImpl.listGoals();
+          const goalEvidences = await Promise.all(goals.map(async (goal) => {
+            const evidences = await discordBotImpl.evidenceManager.getEvidences(goal.goal.id);
+            return {
+              goal: goal.goal,
+              evidencesCount: evidences.length
+            };
+          }));
+          if (data.channel instanceof TextChannel || data.channel instanceof DMChannel) {
+            InteractionUtils.send(intr,`Goals: ${goalEvidences.map(goalEvidence => `Goal ID: ${goalEvidence.goal.id}, Description: ${goalEvidence.goal.description}, Evidence Count: ${goalEvidence.evidencesCount}`).join('\n')}`);
+            //data.channel.send(`Goals: ${goalEvidences.map(goalEvidence => `Goal ID: ${goalEvidence.goal.id}, Description: ${goalEvidence.goal.description}, Evidence Count: ${goalEvidence.evidencesCount}`).join('\n')}`);
+          }
+
         }
       }
     ];
@@ -162,6 +199,25 @@ export class DiscordBotImpl {
         ]
       },
       {
+        name: 'addevidence',
+        type: ApplicationCommandType.ChatInput,
+        description: "Add evidence for a goal",
+        options: [
+          {
+            name: 'goalid',
+            type: ApplicationCommandOptionType.Integer,
+            description: 'The ID of the goal',
+            required: true
+          },
+          {
+            name: 'evidence',
+            type: ApplicationCommandOptionType.String,
+            description: 'The evidence for the goal',
+            required: true
+          }
+        ]
+      },
+      {
         name: 'listgoals',
         type: ApplicationCommandType.ChatInput,
         description: "List all the goals (TODO: in progress)"
@@ -169,5 +225,3 @@ export class DiscordBotImpl {
     ];
   }
 }
-
-
